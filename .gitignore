@@ -1,0 +1,10 @@
+/.cache
+/.build_files
+/.artifacts
+/.third_party_*
+/.vscode
+
+/install-*
+/build
+
+src/cainfo.c

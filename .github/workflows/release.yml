@@ -1,0 +1,56 @@
+name: Releases
+
+on: 
+  push:
+    tags:
+    - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - run: wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libncurses5_6.3-2ubuntu0.1_amd64.deb
+    - run: sudo apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb ./libncurses5_6.3-2ubuntu0.1_amd64.deb
+
+    - uses: actions/checkout@v4
+
+    - uses: DeterminateSystems/nix-installer-action@main
+    - uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r16b
+
+    - run: nix-shell shell.nix
+    - run: ./download_ca_info.sh
+    - run: ./build_dependencies.sh
+      env:
+        ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+    - name: Build armeabi(-v7a)
+      run: cmake
+              -Bbuild-arm
+              -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake
+              -DANDROID_ABI=armeabi-v7a
+              -DCMAKE_BUILD_TYPE=Release
+            && cmake --build build-arm --config Release
+            && cmake --install build-arm --prefix install-arm
+            && cd install-arm && 7z a secnet-arm.7z * && cd ..
+    - name: Build x86
+      run: cmake 
+              -Bbuild-x86
+              -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake
+              -DANDROID_ABI=x86
+              -DCMAKE_BUILD_TYPE=Release
+            && cmake --build build-x86 --config Release
+            && cmake --install build-x86 --prefix install-x86
+            && cd install-x86 && 7z a secnet-x86.7z * && cd ..
+
+    - uses: ncipollo/release-action@v1
+      with:
+        allowUpdates: true
+        immutableCreate: true
+        generateReleaseNotes: true
+        artifacts: "install-arm/secnet-arm.7z,install-x86/secnet-x86.7z"
